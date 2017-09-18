@@ -338,6 +338,25 @@ lazy val evalJS = project.in(file("monix-eval/js"))
   .settings(scalaJSSettings)
   .settings(evalCommon)
 
+lazy val stmCommon =
+  crossSettings ++ testSettings ++ Seq(
+    name := "monix-stm"
+  )
+
+lazy val stmJVM = project.in(file("monix-stm/jvm"))
+  .configure(profile)
+  .dependsOn(evalJVM)
+  .dependsOn(executionJVM)
+  .settings(stmCommon)
+
+lazy val stmJS = project.in(file("monix-stm/js"))
+  .enablePlugins(ScalaJSPlugin)
+  .configure(profile)
+  .dependsOn(evalJS)
+  .dependsOn(executionJS)
+  .settings(scalaJSSettings)
+  .settings(stmCommon)
+
 lazy val tailCommon =
   crossSettings ++ testSettings ++ Seq(
     name := "monix-tail"
