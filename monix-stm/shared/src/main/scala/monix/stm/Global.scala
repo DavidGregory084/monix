@@ -1,7 +1,7 @@
 package monix.stm
 
-import monix.eval.MVar
+import monix.execution.atomic._
 
 object Global {
-  val versionClock = MVar(1)
+  val versionClock = AtomicLong(1L)
 }

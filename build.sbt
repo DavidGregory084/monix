@@ -279,8 +279,8 @@ lazy val monix = project.in(file("."))
 
 lazy val coreJVM = project.in(file("monix/jvm"))
   .configure(profile)
-  .dependsOn(executionJVM, evalJVM, tailJVM, reactiveJVM)
-  .aggregate(executionJVM, evalJVM, tailJVM, reactiveJVM)
+  .dependsOn(executionJVM, evalJVM, stmJVM, tailJVM, reactiveJVM)
+  .aggregate(executionJVM, evalJVM, stmJVM, tailJVM, reactiveJVM)
   .settings(crossSettings)
   .settings(name := "monix")
 
