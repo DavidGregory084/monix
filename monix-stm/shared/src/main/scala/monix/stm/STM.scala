@@ -15,7 +15,37 @@ case class TVar[A] private[stm] (
   writeStamp: AtomicLong,
   content: Atomic[A],
   waitQueue: AtomicAny[List[MVar[Unit]]]
-)
+) {
+  def write(newValue: A): STM[Unit] = STM { ts =>
+    val wsEntry = WSEntry(lock, writeStamp, content, newValue, waitQueue)
+    val writeSet = ts.writeSet.get
+    val newWriteSet = writeSet.updated(id, wsEntry)
+    ts.writeSet.set(newWriteSet.asInstanceOf[Map[Long, WSEntry[Any]]])
+    Task.now(Valid(ts, ()))
+  }
+
+  def read: STM[A] = STM { ts =>
+    ts.writeSet.get.get(id) match {
+      case Some(WSEntry(_, _, _, value, _)) =>
+        Task.now(Valid(ts, value.asInstanceOf[A]))
+      case None =>
+        val lockValue1 = lock.get
+        if (STM.isLocked(lockValue1))
+          Task.now(Invalid(ts))
+        else {
+          val result = content.get
+          val lockValue2 = lock.get
+          if (lockValue1 != lockValue2 || lockValue1 > ts.readStamp)
+            Task.now(Invalid(ts))
+          else {
+            ts.readSet.transform(_ + RSEntry(id, lock, writeStamp, waitQueue))
+            Task.now(Valid(ts, result))
+          }
+        }
+    }
+
+  }
+}
 
 object TVar {
   private val idRef = AtomicLong(0L)
