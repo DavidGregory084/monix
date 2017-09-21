@@ -17,8 +17,14 @@
 
 package monix.stm
 
-import monix.execution.atomic._
+import cats.laws.discipline.{AlternativeTests, MonadTests}
 
-object Global {
-  val versionClock = AtomicLong(1L)
+object TypeClassLawsForSTMSuite extends BaseLawsTestSuite {
+  checkAllAsync("Monad[STM]") { implicit ec =>
+    MonadTests[STM].monad[Int, Int, Int]
+  }
+
+  checkAllAsync("Alternative[STM]") { implicit ec =>
+    AlternativeTests[STM].alternative[Int, Int, Int]
+  }
 }

@@ -346,14 +346,14 @@ lazy val stmCommon =
 lazy val stmJVM = project.in(file("monix-stm/jvm"))
   .configure(profile)
   .dependsOn(evalJVM)
-  .dependsOn(executionJVM)
+  .dependsOn(executionJVM % "compile->compile; test->test")
   .settings(stmCommon)
 
 lazy val stmJS = project.in(file("monix-stm/js"))
   .enablePlugins(ScalaJSPlugin)
   .configure(profile)
   .dependsOn(evalJS)
-  .dependsOn(executionJS)
+  .dependsOn(executionJS % "compile->compile; test->test")
   .settings(scalaJSSettings)
   .settings(stmCommon)
 

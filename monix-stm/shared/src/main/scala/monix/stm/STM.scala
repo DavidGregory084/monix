@@ -1,5 +1,23 @@
+/*
+ * Copyright (c) 2014-2017 by The Monix Project Developers.
+ * See the project homepage at: https://monix.io
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package monix.stm
 
+import cats.{Alternative, Monad, StackSafeMonad}
 import monix.eval.{ MVar, Task }
 import monix.execution.atomic._
 
@@ -308,7 +326,28 @@ object STM {
       }
     }
 
-  def apply[A](f: TState => Task[TResult[A]]) = new STM[A](f)
+  private[stm] def apply[A](f: TState => Task[TResult[A]]) = new STM[A](f)
+
   def valid[A](a: A) = new STM[A](state => Task.now(Valid(state, a)))
+
   def retry[A]: STM[A] = new STM[A](state => Task.now(Retry(state)))
+
+  implicit val monixMonadAlternativeForStm: Monad[STM] with Alternative[STM] = new Monad[STM] with Alternative[STM] with StackSafeMonad[STM] {
+    def flatMap[A, B](fa: STM[A])(f: A => STM[B]) = STM { ts =>
+      fa.run(ts).flatMap {
+        case Valid(nts, v) =>
+          f(v).run(nts)
+        case Retry(nts) =>
+          Task.now(Retry(nts))
+        case Invalid(nts) =>
+          Task.now(Invalid(nts))
+      }
+    }
+
+    def pure[A](a: A): STM[A] = STM.valid(a)
+
+    def empty[A]: STM[A] = STM.retry[A]
+
+    def combineK[A](left: STM[A], right: STM[A]) = left orElse right
+  }
 }
