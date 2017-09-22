@@ -124,7 +124,30 @@ case class WSEntry[A](
 )
 
 class STM[A](private[stm] val run: TState => Task[TResult[A]]) {
-  def orElse(that: STM[A]) = new STM[A](st => {
+
+  def map[B](f: A => B): STM[B] = STM { ts =>
+    run(ts).flatMap {
+      case Valid(nts, v) =>
+        Task.now(Valid(nts, f(v)))
+      case Retry(nts) =>
+        Task.now(Retry(nts))
+      case Invalid(nts) =>
+        Task.now(Invalid(nts))
+    }
+  }
+
+  def flatMap[B](f: A => STM[B]): STM[B] = STM { ts =>
+    run(ts).flatMap {
+      case Valid(nts, v) =>
+        f(v).run(nts)
+      case Retry(nts) =>
+        Task.now(Retry(nts))
+      case Invalid(nts) =>
+        Task.now(Invalid(nts))
+    }
+  }
+
+  def orElse(that: STM[A]): STM[A] = STM { st =>
     // Copy the state for possible later use
     STM.cloneTState(st).flatMap { cpy =>
       // Run the first action with the state
@@ -146,10 +169,30 @@ class STM[A](private[stm] val run: TState => Task[TResult[A]]) {
         case other => Task.now(other)
       }
     }
-  })
+  }
 }
 
 object STM {
+  def main(args: Array[String]): Unit = {
+    import scala.concurrent.Await
+    import scala.concurrent.duration.Duration
+    import monix.execution.Scheduler.Implicits.global
+
+    def loop(tv: TVar[Int]): STM[Int] =
+      tv.read.flatMap { i =>
+        tv.write(i + 1)
+          .flatMap(_ => loop(tv))
+      }
+
+    Await.result(
+      STM.atomically {
+        TVar.create(0)
+          .flatMap(loop)
+      }.runAsync,
+      Duration.Inf
+    )
+  }
+
   type WriteSet = AtomicAny[Map[Long, WSEntry[Any]]]
   type ReadSet = AtomicAny[Set[RSEntry]]
 
@@ -328,21 +371,12 @@ object STM {
 
   private[stm] def apply[A](f: TState => Task[TResult[A]]) = new STM[A](f)
 
-  def valid[A](a: A) = new STM[A](state => Task.now(Valid(state, a)))
+  def valid[A](a: A): STM[A] = STM { state => Task.now(Valid(state, a)) }
 
-  def retry[A]: STM[A] = new STM[A](state => Task.now(Retry(state)))
+  def retry[A]: STM[A] = STM { state => Task.now(Retry(state)) }
 
   implicit val monixMonadAlternativeForStm: Monad[STM] with Alternative[STM] = new Monad[STM] with Alternative[STM] with StackSafeMonad[STM] {
-    def flatMap[A, B](fa: STM[A])(f: A => STM[B]) = STM { ts =>
-      fa.run(ts).flatMap {
-        case Valid(nts, v) =>
-          f(v).run(nts)
-        case Retry(nts) =>
-          Task.now(Retry(nts))
-        case Invalid(nts) =>
-          Task.now(Invalid(nts))
-      }
-    }
+    def flatMap[A, B](fa: STM[A])(f: A => STM[B]) = fa.flatMap(f)
 
     def pure[A](a: A): STM[A] = STM.valid(a)
 
